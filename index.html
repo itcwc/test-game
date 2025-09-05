@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Grid Map Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas to full screen
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Game settings
+        const GRID_SIZE = 30;
+        const CHARACTER_SIZE = GRID_SIZE * 0.8;
+        const CHARACTER_COLOR = '#4CAF50';
+        const GRID_COLOR = '#333';
+        const LINE_COLOR = '#555';
+
+        // Character position (world coordinates)
+        let charX = 0;
+        let charY = 0;
+        let prevCharX = 0;
+        let prevCharY = 0;
+        let positionHistory = [];
+        let isMoving = false;
+        let lastMoveTime = 0;
+        let visitedCells = new Set();
+
+        // Camera offset (to keep character centered)
+        let cameraX = 0;
+        let cameraY = 0;
+
+        // Keyboard controls
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false,
+            KeyW: false,
+            KeyA: false,
+            KeyS: false,
+            KeyD: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.code)) {
+                keys[e.code] = false;
+            }
+        });
+
+        // Update game state
+        function update() {
+            prevCharX = charX;
+            prevCharY = charY;
+
+            // Move character based on keys
+            if (keys.ArrowUp || keys.KeyW) charY--;
+            if (keys.ArrowDown || keys.KeyS) charY++;
+            if (keys.ArrowLeft || keys.KeyA) charX--;
+            if (keys.ArrowRight || keys.KeyD) charX++;
+
+            // Record position history if moved
+            isMoving = charX !== prevCharX || charY !== prevCharY;
+            if (isMoving) {
+                positionHistory.unshift({x: charX, y: charY});
+                if (positionHistory.length > 3) {
+                    positionHistory.pop();
+                }
+                lastMoveTime = Date.now();
+                // Record visited cell
+                const cellKey = `${charX},${charY}`;
+                visitedCells.add(cellKey);
+            } else {
+                // Clear trails after 1 second of inactivity
+                if (Date.now() - lastMoveTime > 1000) {
+                    positionHistory = [];
+                }
+            }
+
+            // Update camera to keep character centered
+            cameraX = canvas.width / 2 - charX * GRID_SIZE - GRID_SIZE / 2;
+            cameraY = canvas.height / 2 - charY * GRID_SIZE - GRID_SIZE / 2;
+
+            requestAnimationFrame(update);
+        }
+
+        // Draw game
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = GRID_COLOR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Calculate visible grid range
+            const startCol = Math.floor(-cameraX / GRID_SIZE) - 1;
+            const endCol = Math.floor((-cameraX + canvas.width) / GRID_SIZE) + 1;
+            const startRow = Math.floor(-cameraY / GRID_SIZE) - 1;
+            const endRow = Math.floor((-cameraY + canvas.height) / GRID_SIZE) + 1;
+
+            // Draw visited cells with color marker
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)'; // More visible green tint
+            for (let col = startCol; col <= endCol; col++) {
+                for (let row = startRow; row <= endRow; row++) {
+                    const cellKey = `${col},${row}`;
+                    if (visitedCells.has(cellKey)) {
+                        ctx.fillRect(
+                            col * GRID_SIZE + cameraX,
+                            row * GRID_SIZE + cameraY,
+                            GRID_SIZE,
+                            GRID_SIZE
+                        );
+                    }
+                }
+            }
+
+            // Draw grid lines
+            ctx.strokeStyle = LINE_COLOR;
+            ctx.lineWidth = 1;
+
+            // Vertical lines
+            for (let col = startCol; col <= endCol; col++) {
+                const x = col * GRID_SIZE + cameraX;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            // Horizontal lines
+            for (let row = startRow; row <= endRow; row++) {
+                const y = row * GRID_SIZE + cameraY;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw character
+            const charScreenX = charX * GRID_SIZE + cameraX + GRID_SIZE / 2;
+            const charScreenY = charY * GRID_SIZE + cameraY + GRID_SIZE / 2;
+
+            ctx.fillStyle = CHARACTER_COLOR;
+            ctx.beginPath();
+            ctx.arc(charScreenX, charScreenY, CHARACTER_SIZE / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw position history (ghost trails)
+            positionHistory.forEach((pos, index) => {
+                const alpha = 0.9 - (index * 0.3); // More visible fading effect
+                const size = CHARACTER_SIZE / 2 * (1 - index * 0.05); // Less shrinking
+                ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // Gold color for better visibility
+                const trailX = pos.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
+                const trailY = pos.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
+                ctx.beginPath();
+                ctx.arc(trailX, trailY, size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            requestAnimationFrame(draw);
+        }
+
+        // Start game loop
+        update();
+        draw();
+    </script>
+</body>
+</html>
