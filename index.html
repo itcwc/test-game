@@ -1,364 +1,258 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Grid Map Game</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #1a1a1a;
-        }
-
-        canvas {
-            display: block;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infinite Grid Game with Fade Trail</title>
+<style>
+    body { margin:0; overflow:hidden; background-color:#1a1a1a; }
+    canvas { display:block; }
+</style>
 </head>
-
 <body>
-    <canvas id="gameCanvas"></canvas>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+function resizeCanvas(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-        // 设置画布为全屏
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+// 游戏设置
+const GRID_SIZE = 30;
+const CHARACTER_SIZE = GRID_SIZE*0.8;
+const CHARACTER_COLOR = '#4CAF50';
+const GRID_COLOR = '#333';
+const LINE_COLOR = '#555';
+const ENEMY_COLOR = '#FF4444';
+const ENEMY_SIZE = GRID_SIZE*0.7;
+
+let playerHealth = 10;
+const MAX_HEALTH = 10;
+const ENEMY_DAMAGE = 1;
+
+let charX = 0, charY = 0;
+let positionHistory = [];
+let visitedCells = new Set();
+let lastMoveTime = Date.now();
+
+let enemies = [];
+const ENEMY_SPAWN_INTERVAL = 2000;
+let lastEnemySpawnTime = 0;
+
+let cameraX = 0, cameraY = 0;
+let gameOver = false;
+
+const keys = {};
+['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD'].forEach(k=>keys[k]=false);
+
+window.addEventListener('keydown', e=>{
+    if(keys.hasOwnProperty(e.code)){ e.preventDefault(); keys[e.code]=true; }
+    if(gameOver && e.code==='Enter') resetGame();
+});
+window.addEventListener('keyup', e=>{ if(keys.hasOwnProperty(e.code)) keys[e.code]=false; });
+
+// 敌人生成
+function spawnEnemy(){
+    if(gameOver) return;
+    const spawnDistance = 15;
+    const angle = Math.random()*Math.PI*2;
+    const enemyX = charX + Math.cos(angle)*spawnDistance;
+    const enemyY = charY + Math.sin(angle)*spawnDistance;
+    enemies.push({
+        x: enemyX,
+        y: enemyY,
+        health: 1,
+        rotation: 0,
+        rotationSpeed: 0.1,
+        speed: 0.25 // 合理速度
+    });
+}
+
+// 更新敌人
+function updateEnemies(deltaTime){
+    if(gameOver) return;
+    enemies.forEach(enemy=>{
+        const dx = charX - enemy.x;
+        const dy = charY - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        if(distance>0){
+            enemy.x += (dx/distance) * enemy.speed * deltaTime;
+            enemy.y += (dy/distance) * enemy.speed * deltaTime;
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        // 游戏设置
-        const GRID_SIZE = 30;
-        const CHARACTER_SIZE = GRID_SIZE * 0.8;
-        const CHARACTER_COLOR = '#4CAF50';
-        const GRID_COLOR = '#333';
-        const LINE_COLOR = '#555';
-        const ENEMY_COLOR = '#FF4444';
-        const ENEMY_SIZE = GRID_SIZE * 0.7;
-
-        // 生命值系统
-        let playerHealth = 10;
-        const ENEMY_HEALTH = 1;
-        const ENEMY_DAMAGE = 1;
-        let gameOver = false;
-
-        // 角色位置 (世界坐标)
-        let charX = 0;
-        let charY = 0;
-        let prevCharX = 0;
-        let prevCharY = 0;
-        let positionHistory = [];
-        let isMoving = false;
-        let lastMoveTime = 0;
-        let visitedCells = new Set();
-
-        // 敌人数组
-        let enemies = [];
-        const ENEMY_SPAWN_INTERVAL = 2000; // 每2秒生成一个敌人
-        let lastEnemySpawnTime = 0;
-
-        // 相机偏移量 (使角色保持在中心)
-        let cameraX = 0;
-        let cameraY = 0;
-
-        // 键盘控制
-        const keys = {
-            ArrowUp: false,
-            ArrowDown: false,
-            ArrowLeft: false,
-            ArrowRight: false,
-            KeyW: false,
-            KeyA: false,
-            KeyS: false,
-            KeyD: false
-        };
-
-        window.addEventListener('keydown', (e) => {
-            if (keys.hasOwnProperty(e.code)) {
-                keys[e.code] = true;
+        enemy.rotation += enemy.rotationSpeed;
+        if(distance<0.8){
+            playerHealth -= ENEMY_DAMAGE;
+            if(playerHealth <=0){
+                playerHealth=0;
+                gameOver=true;
             }
-            // 游戏结束时按回车键重新开始
-            if (gameOver && e.code === 'Enter') {
-                resetGame();
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            if (keys.hasOwnProperty(e.code)) {
-                keys[e.code] = false;
-            }
-        });
-
-        // 生成新敌人
-        function spawnEnemy() {
-            if (gameOver) return;
-
-            const spawnDistance = 15; // 在远离玩家的位置生成敌人
-
-            // Randomly choose a direction to spawn from
-            const direction = Math.floor(Math.random() * 4);
-            let enemyX, enemyY;
-
-            switch (direction) {
-                case 0: // Top
-                    enemyX = charX + Math.floor(Math.random() * (spawnDistance * 2)) - spawnDistance;
-                    enemyY = charY - spawnDistance;
-                    break;
-                case 1: // Right
-                    enemyX = charX + spawnDistance;
-                    enemyY = charY + Math.floor(Math.random() * (spawnDistance * 2)) - spawnDistance;
-                    break;
-                case 2: // Bottom
-                    enemyX = charX + Math.floor(Math.random() * (spawnDistance * 2)) - spawnDistance;
-                    enemyY = charY + spawnDistance;
-                    break;
-                case 3: // Left
-                    enemyX = charX - spawnDistance;
-                    enemyY = charY + Math.floor(Math.random() * (spawnDistance * 2)) - spawnDistance;
-                    break;
-            }
-
-            enemies.push({
-                x: enemyX,
-                y: enemyY,
-                health: ENEMY_HEALTH,
-                damage: ENEMY_DAMAGE,
-                rotation: 0,
-                rotationSpeed: 0.1 // Rotation speed in radians per frame
-            });
+            enemy.health=0;
         }
+    });
+    enemies = enemies.filter(e=>e.health>0);
+}
 
-        // 更新敌人位置，使其向玩家移动
-        function updateEnemies() {
-            if (gameOver) return;
+// 重置游戏
+function resetGame(){
+    playerHealth = MAX_HEALTH;
+    gameOver=false;
+    enemies=[];
+    charX=0;
+    charY=0;
+    visitedCells=new Set();
+    positionHistory=[];
+    lastEnemySpawnTime=0;
+    lastMoveTime=Date.now();
+}
 
-            enemies = enemies.filter(enemy => {
-                // 向玩家移动
-                if (enemy.x < charX) enemy.x += 0.25;
-                else if (enemy.x > charX) enemy.x -= 0.25;
-                if (enemy.y < charY) enemy.y += 0.25;
-                else if (enemy.y > charY) enemy.y -= 0.25;
+// 更新逻辑
+let lastFrameTime = Date.now();
+function update(){
+    const now = Date.now();
+    const deltaTime = (now-lastFrameTime)/16.6667; // 基于60FPS比例
+    lastFrameTime = now;
 
-                // 更新旋转角度
-                enemy.rotation += enemy.rotationSpeed;
+    if(!gameOver){
+        const prevX=charX, prevY=charY;
+        if(keys.ArrowUp||keys.KeyW) charY--;
+        if(keys.ArrowDown||keys.KeyS) charY++;
+        if(keys.ArrowLeft||keys.KeyA) charX--;
+        if(keys.ArrowRight||keys.KeyD) charX++;
 
-                // 检查与玩家的碰撞
-                const dx = Math.abs(enemy.x - charX);
-                const dy = Math.abs(enemy.y - charY);
-                if (dx < 0.8 && dy < 0.8) {
-                    // 玩家受到伤害
-                    playerHealth -= enemy.damage;
-                    if (playerHealth <= 0) {
-                        playerHealth = 0;
-                        gameOver = true;
-                    }
-                    return false; // Remove enemy after collision
-                }
-
-                return true;
-            });
+        const isMoving = charX!==prevX || charY!==prevY;
+        if(isMoving){
+            positionHistory.unshift({x:charX,y:charY});
+            if(positionHistory.length>3) positionHistory.pop();
+            visitedCells.add(`${charX},${charY}`);
+            lastMoveTime = now;
+        } else {
+            if(now - lastMoveTime > 1000){
+                positionHistory=[];
+            }
         }
 
-        // 重置游戏状态，开启新一局
-        function resetGame() {
-            playerHealth = 10;
-            gameOver = false;
-            enemies = [];
-            charX = 0;
-            charY = 0;
-            visitedCells = new Set();
-            positionHistory = [];
-            lastEnemySpawnTime = 0;
+        if(now - lastEnemySpawnTime > ENEMY_SPAWN_INTERVAL){
+            spawnEnemy();
+            lastEnemySpawnTime = now;
         }
 
-        // 更新游戏状态
-        function update() {
-            if (gameOver) {
-                requestAnimationFrame(update);
-                return;
+        updateEnemies(deltaTime);
+        cameraX = canvas.width/2 - charX*GRID_SIZE - GRID_SIZE/2;
+        cameraY = canvas.height/2 - charY*GRID_SIZE - GRID_SIZE/2;
+    }
+
+    requestAnimationFrame(update);
+}
+
+// 绘制
+function draw(){
+    ctx.fillStyle = GRID_COLOR;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const startCol = Math.floor(-cameraX/GRID_SIZE)-1;
+    const endCol = Math.floor((-cameraX+canvas.width)/GRID_SIZE)+1;
+    const startRow = Math.floor(-cameraY/GRID_SIZE)-1;
+    const endRow = Math.floor((-cameraY+canvas.height)/GRID_SIZE)+1;
+
+    // 已访问格子
+    ctx.fillStyle='rgba(76,175,80,0.4)';
+    for(let col=startCol;col<=endCol;col++){
+        for(let row=startRow;row<=endRow;row++){
+            if(visitedCells.has(`${col},${row}`)){
+                ctx.fillRect(col*GRID_SIZE+cameraX,row*GRID_SIZE+cameraY,GRID_SIZE,GRID_SIZE);
             }
-
-            prevCharX = charX;
-            prevCharY = charY;
-
-            // Move character based on keys
-            if (keys.ArrowUp || keys.KeyW) charY--;
-            if (keys.ArrowDown || keys.KeyS) charY++;
-            if (keys.ArrowLeft || keys.KeyA) charX--;
-            if (keys.ArrowRight || keys.KeyD) charX++;
-
-            // 如果移动则记录位置历史
-            isMoving = charX !== prevCharX || charY !== prevCharY;
-            if (isMoving) {
-                positionHistory.unshift({ x: charX, y: charY });
-                if (positionHistory.length > 3) {
-                    positionHistory.pop();
-                }
-                lastMoveTime = Date.now();
-                // 记录已访问的格子
-                const cellKey = `${charX},${charY}`;
-                visitedCells.add(cellKey);
-            } else {
-                // 1秒不活动后清除残影
-                if (Date.now() - lastMoveTime > 1000) {
-                    positionHistory = [];
-                }
-            }
-
-            // Spawn enemies at interval
-            const currentTime = Date.now();
-            if (currentTime - lastEnemySpawnTime > ENEMY_SPAWN_INTERVAL) {
-                spawnEnemy();
-                lastEnemySpawnTime = currentTime;
-            }
-
-            // Update enemies
-            updateEnemies();
-
-            // Update camera to keep character centered
-            cameraX = canvas.width / 2 - charX * GRID_SIZE - GRID_SIZE / 2;
-            cameraY = canvas.height / 2 - charY * GRID_SIZE - GRID_SIZE / 2;
-
-            requestAnimationFrame(update);
         }
+    }
 
-        // 绘制游戏
-        function draw() {
+    // 网格
+    ctx.strokeStyle=LINE_COLOR;
+    ctx.lineWidth=1;
+    for(let col=startCol;col<=endCol;col++){
+        const x = col*GRID_SIZE+cameraX;
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,canvas.height);
+        ctx.stroke();
+    }
+    for(let row=startRow;row<=endRow;row++){
+        const y = row*GRID_SIZE+cameraY;
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(canvas.width,y);
+        ctx.stroke();
+    }
 
+    // 敌人
+    enemies.forEach(enemy=>{
+        const ex = enemy.x*GRID_SIZE+cameraX+GRID_SIZE/2;
+        const ey = enemy.y*GRID_SIZE+cameraY+GRID_SIZE/2;
+        ctx.fillStyle=ENEMY_COLOR;
+        ctx.save();
+        ctx.translate(ex,ey);
+        ctx.rotate(enemy.rotation);
+        ctx.beginPath();
+        ctx.moveTo(0,-ENEMY_SIZE/2);
+        ctx.lineTo(-ENEMY_SIZE/2,ENEMY_SIZE/2);
+        ctx.lineTo(ENEMY_SIZE/2,ENEMY_SIZE/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    });
 
-            // 清空画布
-            ctx.fillStyle = GRID_COLOR;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // 角色
+    const charScreenX = charX*GRID_SIZE+cameraX+GRID_SIZE/2;
+    const charScreenY = charY*GRID_SIZE+cameraY+GRID_SIZE/2;
+    ctx.fillStyle = CHARACTER_COLOR;
+    ctx.beginPath();
+    ctx.arc(charScreenX,charScreenY,CHARACTER_SIZE/2,0,Math.PI*2);
+    ctx.fill();
 
-            // 计算角色屏幕位置
-            const charScreenX = charX * GRID_SIZE + cameraX + GRID_SIZE / 2;
-            const charScreenY = charY * GRID_SIZE + cameraY + GRID_SIZE / 2;
+    // 残影
+    positionHistory.forEach((pos,index)=>{
+        const alpha = 0.9 - index*0.3;
+        const size = CHARACTER_SIZE/2*(1-index*0.05);
+        ctx.fillStyle=`rgba(76,175,80,${alpha})`;
+        const tx = pos.x*GRID_SIZE+cameraX+GRID_SIZE/2;
+        const ty = pos.y*GRID_SIZE+cameraY+GRID_SIZE/2;
+        ctx.beginPath();
+        ctx.arc(tx,ty,size,0,Math.PI*2);
+        ctx.fill();
+    });
 
-            // 计算可见网格范围
-            const startCol = Math.floor(-cameraX / GRID_SIZE) - 1;
-            const endCol = Math.floor((-cameraX + canvas.width) / GRID_SIZE) + 1;
-            const startRow = Math.floor(-cameraY / GRID_SIZE) - 1;
-            const endRow = Math.floor((-cameraY + canvas.height) / GRID_SIZE) + 1;
+    // 血条
+    ctx.fillStyle='#333';
+    ctx.fillRect(20,20,200,20);
+    ctx.fillStyle = playerHealth>5?'#4CAF50':playerHealth>2?'#FFC107':'#F44336';
+    ctx.fillRect(20,20,(playerHealth/MAX_HEALTH)*200,20);
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=2;
+    ctx.strokeRect(20,20,200,20);
+    ctx.fillStyle='#fff';
+    ctx.font='14px Arial';
+    ctx.fillText(`Health: ${playerHealth}/${MAX_HEALTH}`,80,34);
 
-            // Draw visited cells with color marker
-            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)'; // 更明显的绿色色调
-            for (let col = startCol; col <= endCol; col++) {
-                for (let row = startRow; row <= endRow; row++) {
-                    const cellKey = `${col},${row}`;
-                    if (visitedCells.has(cellKey)) {
-                        ctx.fillRect(
-                            col * GRID_SIZE + cameraX,
-                            row * GRID_SIZE + cameraY,
-                            GRID_SIZE,
-                            GRID_SIZE
-                        );
-                    }
-                }
-            }
+    // 游戏结束
+    if(gameOver){
+        ctx.fillStyle='rgba(0,0,0,0.7)';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle='#fff';
+        ctx.font='48px Arial';
+        ctx.textAlign='center';
+        ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2);
+        ctx.font='24px Arial';
+        ctx.fillText('Press Enter to Restart',canvas.width/2,canvas.height/2+40);
+    }
 
-            // 绘制网格线
-            ctx.strokeStyle = LINE_COLOR;
-            ctx.lineWidth = 1;
+    requestAnimationFrame(draw);
+}
 
-            // 垂直线条
-            for (let col = startCol; col <= endCol; col++) {
-                const x = col * GRID_SIZE + cameraX;
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
-                ctx.stroke();
-            }
-
-            // 水平线条
-            for (let row = startRow; row <= endRow; row++) {
-                const y = row * GRID_SIZE + cameraY;
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-                ctx.stroke();
-            }
-
-            // Draw enemies
-            enemies = enemies.filter(enemy => enemy.health > 0); // Remove dead enemies
-
-            enemies.forEach(enemy => {
-                const enemyScreenX = enemy.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
-                const enemyScreenY = enemy.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
-
-                ctx.fillStyle = enemy.health <= 0 ? '#888888' : ENEMY_COLOR; // 死亡敌人显示为灰色
-
-                ctx.save();
-                // 平移到敌人中心
-                ctx.translate(enemyScreenX, enemyScreenY);
-                // 围绕中心旋转
-                ctx.rotate(enemy.rotation);
-                // 绘制旋转三角形
-                ctx.beginPath();
-                ctx.moveTo(0, -ENEMY_SIZE / 2);
-                ctx.lineTo(-ENEMY_SIZE / 2, ENEMY_SIZE / 2);
-                ctx.lineTo(ENEMY_SIZE / 2, ENEMY_SIZE / 2);
-                ctx.closePath();
-                ctx.fill();
-                ctx.restore();
-            });
-
-            // Draw character
-            ctx.fillStyle = CHARACTER_COLOR;
-            ctx.beginPath();
-            ctx.arc(charScreenX, charScreenY, CHARACTER_SIZE / 2, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 绘制生命值条
-            ctx.fillStyle = '#333';
-            ctx.fillRect(20, 20, 200, 20);
-            ctx.fillStyle = playerHealth > 5 ? '#4CAF50' : playerHealth > 2 ? '#FFC107' : '#F44336';
-            ctx.fillRect(20, 20, (playerHealth / 10) * 200, 20);
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(20, 20, 200, 20);
-
-            // 绘制生命值文本
-            ctx.fillStyle = '#fff';
-            ctx.font = '14px Arial';
-            ctx.fillText(`Health: ${playerHealth}/10`, 80, 34);
-
-            // 绘制位置历史 (残影效果)
-            positionHistory.forEach((pos, index) => {
-                const alpha = 0.9 - (index * 0.3); // 更明显的淡出效果
-                const size = CHARACTER_SIZE / 2 * (1 - index * 0.05); // 缩小程度降低
-                ctx.fillStyle = `rgba(76, 175, 80, ${alpha})`; // 与角色颜色一致的绿色
-                const trailX = pos.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
-                const trailY = pos.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
-                ctx.beginPath();
-                ctx.arc(trailX, trailY, size, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            // 绘制游戏结束画面
-            if (gameOver) {
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#fff';
-                ctx.font = '48px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
-                ctx.font = '24px Arial';
-                ctx.fillText('刷新页面重新开始游戏', canvas.width / 2, canvas.height / 2 + 40);
-            }
-
-            requestAnimationFrame(draw);
-        }
-
-        // 开始游戏循环
-        update();
-        draw();
-    </script>
+update();
+draw();
+</script>
 </body>
-
 </html>
