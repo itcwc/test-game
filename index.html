@@ -1,258 +1,2042 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Infinite Grid Game with Fade Trail</title>
+<title>网格战斗 - 自动攻击模式</title>
 <style>
-    body { margin:0; overflow:hidden; background-color:#1a1a1a; }
-    canvas { display:block; }
+    body { 
+        margin: 0; 
+        overflow: hidden; 
+        background-color: #1a1a1a; 
+        width: 100vw;
+        height: 100vh;
+    }
+    canvas { 
+        display: block; 
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+    #gameOverlays {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 10;
+    }
+    .notification {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0,0,0,0.8);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        opacity: 0;
+        transition: opacity 0.3s, transform 0.3s;
+        transform: translate(-50%, -20px);
+        pointer-events: none;
+    }
+    .notification.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+    /* 选择菜单通用样式 */
+    .selectionMenu {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(30, 30, 30, 0.95);
+        border-radius: 10px;
+        padding: 20px;
+        width: 80%;
+        max-width: 400px;
+        font-family: Arial, sans-serif;
+        z-index: 20;
+        display: none;
+        pointer-events: auto;
+        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    .selectionMenu h2 {
+        color: #FFD700;
+        text-align: center;
+        margin-top: 0;
+        border-bottom: 2px solid #555;
+        padding-bottom: 10px;
+    }
+    .selectionOption {
+        background-color: #333;
+        border: 2px solid #555;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: white;
+    }
+    .selectionOption:hover {
+        background-color: #444;
+        border-color: #777;
+        transform: translateY(-2px);
+    }
+    .selectionOption h3 {
+        margin: 0 0 5px 0;
+        color: #4CAF50;
+    }
+    .selectionOption p {
+        margin: 0;
+        font-size: 14px;
+        color: #ddd;
+    }
+    /* 虚拟摇杆样式 */
+    #joystick {
+        position: fixed;
+        bottom: 30px;
+        left: 30px;
+        width: 120px;
+        height: 120px;
+        pointer-events: auto;
+        opacity: 0.7;
+        display: none;
+    }
+    #joystickBg {
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        border-radius: 50%;
+    }
+    #joystickKnob {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 40px;
+        height: 40px;
+        background: rgba(255,255,255,0.8);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+    }
+    /* 等级UI */
+    #levelDisplay {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background-color: rgba(0,0,0,0.7);
+        border-radius: 6px;
+        padding: 8px 12px;
+        color: white;
+        font-family: Arial, sans-serif;
+        z-index: 5;
+        pointer-events: none;
+    }
+    #xpBar {
+        height: 6px;
+        background-color: #555;
+        border-radius: 3px;
+        margin-top: 5px;
+        overflow: hidden;
+    }
+    #xpFill {
+        height: 100%;
+        background-color: #FFD700;
+        width: 0%;
+        transition: width 0.3s;
+    }
+    /* 游戏开始菜单 */
+    #startMenu {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(30, 30, 30, 0.95);
+        border-radius: 10px;
+        padding: 30px;
+        width: 80%;
+        max-width: 500px;
+        font-family: Arial, sans-serif;
+        z-index: 30;
+        display: block;
+        pointer-events: auto;
+        box-shadow: 0 0 30px rgba(0,0,0,0.7);
+    }
+    #startMenu h1 {
+        color: #FFD700;
+        text-align: center;
+        margin-top: 0;
+        margin-bottom: 20px;
+    }
+    #startMenu p {
+        color: #ddd;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    #startButton {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 18px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: block;
+        margin: 0 auto;
+        transition: background-color 0.3s;
+    }
+    #startButton:hover {
+        background-color: #45a049;
+    }
 </style>
 </head>
 <body>
 <canvas id="gameCanvas"></canvas>
+<div id="gameOverlays">
+    <div class="notification" id="notification"></div>
+</div>
+<!-- 等级显示 -->
+<div id="levelDisplay">
+    等级: <span id="levelValue">1</span>
+    <div id="xpBar">
+        <div id="xpFill"></div>
+    </div>
+</div>
+<!-- 初始攻击选择菜单 -->
+<div id="initialAttackMenu" class="selectionMenu">
+    <h2>选择自动攻击方式</h2>
+    <p style="color: #ddd; text-align: center; margin-bottom: 15px;">选择你的自动攻击能力：</p>
+    <div class="selectionOption" data-choice="projectile">
+        <h3>能量投射物</h3>
+        <p>自动发射伤害敌人的投射物（有冷却时间）</p>
+    </div>
+    <div class="selectionOption" data-choice="slam">
+        <h3>地面重击</h3>
+        <p>自动对附近敌人进行强力重击（有冷却时间）</p>
+    </div>
+    <div class="selectionOption" data-choice="dash">
+        <h3>战斗冲刺</h3>
+        <p>自动向前冲刺，伤害路径上的敌人（有冷却时间）</p>
+    </div>
+</div>
+<!-- 升级选择菜单 -->
+<div id="levelUpMenu" class="selectionMenu">
+    <h2>升级了！选择一个能力</h2>
+    <div class="selectionOption" data-choice="projectile">
+        <h3>能量投射物</h3>
+        <p>自动发射伤害敌人的投射物（提高频率和伤害）</p>
+    </div>
+    <div class="selectionOption" data-choice="slam">
+        <h3>地面重击</h3>
+        <p>自动对附近敌人进行强力重击（提高频率和伤害范围）</p>
+    </div>
+    <div class="selectionOption" data-choice="dash">
+        <h3>战斗冲刺</h3>
+        <p>自动向前冲刺，伤害路径上的敌人（提高频率和距离）</p>
+    </div>
+</div>
+<!-- 游戏开始菜单 -->
+<div id="startMenu">
+    <h1>网格战斗 - 自动攻击模式</h1>
+    <p>自动攻击模式：只需控制移动，系统会自动攻击！</p>
+    <p>在敌人的浪潮中尽可能长时间地生存！升级以变得更强。</p>
+    <button id="startButton">开始游戏</button>
+</div>
+<!-- 虚拟摇杆 -->
+<div id="joystick">
+    <div id="joystickBg"></div>
+    <div id="joystickKnob"></div>
+</div>
+
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const notification = document.getElementById('notification');
+const levelUpMenu = document.getElementById('levelUpMenu');
+const initialAttackMenu = document.getElementById('initialAttackMenu');
+const startMenu = document.getElementById('startMenu');
+const startButton = document.getElementById('startButton');
+const levelValue = document.getElementById('levelValue');
+const xpFill = document.getElementById('xpFill');
 
-function resizeCanvas(){
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+// 画布设置
+function setupCanvas() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
 
-// 游戏设置
+function resizeCanvas() {
+    setupCanvas();
+    cameraX = canvas.width/2 - charX * GRID_SIZE - GRID_SIZE/2;
+    cameraY = canvas.height/2 - charY * GRID_SIZE - GRID_SIZE/2;
+}
+
+setupCanvas();
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', resizeCanvas);
+
+// 游戏基础设置
 const GRID_SIZE = 30;
-const CHARACTER_SIZE = GRID_SIZE*0.8;
+const CHARACTER_SIZE = GRID_SIZE * 0.8;
 const CHARACTER_COLOR = '#4CAF50';
-const GRID_COLOR = '#333';
-const LINE_COLOR = '#555';
-const ENEMY_COLOR = '#FF4444';
-const ENEMY_SIZE = GRID_SIZE*0.7;
+const GRID_COLOR = '#1a1a1a';
+const LINE_COLOR = '#3a3a3a';
+const ENEMY_COLORS = {
+    basic: '#FF4444',
+    fast: '#FF9800',
+    tank: '#9C27B0',
+    seeker: '#03A9F4'
+};
+const ENEMY_SIZES = {
+    basic: GRID_SIZE * 0.7,
+    fast: GRID_SIZE * 0.6,
+    tank: GRID_SIZE * 0.8,
+    seeker: GRID_SIZE * 0.55
+};
+
+// 等级和经验系统
+let playerLevel = 1;
+let currentXP = 0;
+let xpToNextLevel = 100;
+let availableAbilities = [];
+
+// 攻击能力设置 - 初始都未解锁
+const abilities = {
+    projectile: {
+        unlocked: false,
+        damage: 1,
+        cooldown: 1500,
+        lastUsed: 0,
+        range: 8,
+        speed: 0.8
+    },
+    slam: {
+        unlocked: false,
+        damage: 2,
+        cooldown: 3000,
+        lastUsed: 0,
+        radius: 3
+    },
+    dash: {
+        unlocked: false,
+        damage: 1,
+        cooldown: 2000,
+        lastUsed: 0,
+        distance: 5,
+        speed: 2.5
+    }
+};
+
+// 攻击 projectile
+let projectiles = [];
+
+// 道具设置
+const POWERUP_TYPES = {
+    health: { color: '#4CAF50', duration: 0, effect: 'health', icon: '+' },
+    speed: { color: '#2196F3', duration: 5000, effect: 'speed', icon: '⚡' },
+    shield: { color: '#FFEB3B', duration: 8000, effect: 'shield', icon: '🛡️' },
+    blast: { color: '#F44336', duration: 0, effect: 'blast', icon: '💥' },
+    xpboost: { color: '#FFD700', duration: 0, effect: 'xpboost', icon: '✦' }
+};
+const POWERUP_SIZE = GRID_SIZE * 0.6;
+const POWERUP_SPAWN_INTERVAL = 10000;
+let lastPowerupSpawnTime = 0;
+let powerups = [];
+
+// 粒子效果系统
+let particles = [];
+
+// 游戏系统配置
+const GAME_DURATION = 600;
+let gameStartTime = Date.now();
+let remainingTime = GAME_DURATION;
+let gameWon = false;
+let score = 0;
+let highScore = localStorage.getItem('gridGameHighScore') || 0;
+let comboMultiplier = 1;
+let lastEnemyKillTime = 0;
+const COMBO_TIMEOUT = 3000;
 
 let playerHealth = 10;
-const MAX_HEALTH = 10;
-const ENEMY_DAMAGE = 1;
+let maxHealth = 10;
+const BASE_SPEED = 0.5;
+let playerSpeed = BASE_SPEED;
 
+// 玩家状态效果
+let activeEffects = {
+    speed: { active: false, endTime: 0 },
+    shield: { active: false, endTime: 0 },
+    invulnerable: { active: false, endTime: 0 },
+    xpboost: { active: false, endTime: 0, multiplier: 1.5 }
+};
+
+// 角色位置与移动状态
 let charX = 0, charY = 0;
 let positionHistory = [];
 let visitedCells = new Set();
 let lastMoveTime = Date.now();
 
-let enemies = [];
-const ENEMY_SPAWN_INTERVAL = 2000;
-let lastEnemySpawnTime = 0;
+// 物理移动参数
+let moveVelocity = { x: 0, y: 0 };
+const ACCELERATION = 0.06;
+const DECELERATION = 0.14;
+let currentMaxSpeed = BASE_SPEED * 1.1;
 
+// 敌人设置
+let enemies = [];
+let enemySpawnInterval = 2000;
+let lastEnemySpawnTime = 0;
+let enemyTypes = ['basic'];
+let enemySpeedMultiplier = 0.6;
+
+// 相机设置
 let cameraX = 0, cameraY = 0;
 let gameOver = false;
+let levelUpPending = false;
+let gameStarted = false;
+let initialAttackChosen = false;
 
+// 键盘控制
 const keys = {};
-['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD'].forEach(k=>keys[k]=false);
+['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD'].forEach(k => keys[k] = false);
 
-window.addEventListener('keydown', e=>{
-    if(keys.hasOwnProperty(e.code)){ e.preventDefault(); keys[e.code]=true; }
-    if(gameOver && e.code==='Enter') resetGame();
-});
-window.addEventListener('keyup', e=>{ if(keys.hasOwnProperty(e.code)) keys[e.code]=false; });
+// 虚拟摇杆控制
+const joystick = {
+    isActive: false,
+    centerX: 0,
+    centerY: 0,
+    radius: 60,
+    dir: { x: 0, y: 0 }
+};
+const joystickBg = document.getElementById('joystickBg');
+const joystickKnob = document.getElementById('joystickKnob');
 
-// 敌人生成
-function spawnEnemy(){
-    if(gameOver) return;
-    const spawnDistance = 15;
-    const angle = Math.random()*Math.PI*2;
-    const enemyX = charX + Math.cos(angle)*spawnDistance;
-    const enemyY = charY + Math.sin(angle)*spawnDistance;
-    enemies.push({
-        x: enemyX,
-        y: enemyY,
-        health: 1,
-        rotation: 0,
-        rotationSpeed: 0.1,
-        speed: 0.25 // 合理速度
-    });
+// 显示通知
+function showNotification(text, duration = 2000) {
+    notification.textContent = text;
+    notification.classList.add('show');
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, duration);
 }
 
-// 更新敌人
-function updateEnemies(deltaTime){
-    if(gameOver) return;
-    enemies.forEach(enemy=>{
+// 经验和等级系统
+function gainXP(amount) {
+    if (activeEffects.xpboost.active) {
+        amount = Math.floor(amount * activeEffects.xpboost.multiplier);
+        showNotification(`+${amount} 经验值 (已加成)`);
+    } else {
+        showNotification(`+${amount} 经验值`);
+    }
+    
+    currentXP += amount;
+    
+    // 检查是否升级
+    while (currentXP >= xpToNextLevel) {
+        currentXP -= xpToNextLevel;
+        playerLevel++;
+        levelUp();
+        xpToNextLevel = Math.floor(xpToNextLevel * 1.5);
+    }
+    
+    // 更新UI
+    updateLevelUI();
+}
+
+function levelUp() {
+    showNotification(`升级了！现在是${playerLevel}级！`, 3000);
+    levelValue.textContent = playerLevel;
+    
+    // 升级奖励
+    playerHealth = Math.min(playerHealth + 2, maxHealth);
+    
+    // 每3级增加最大生命值
+    if (playerLevel % 3 === 0) {
+        const oldMax = maxHealth;
+        maxHealth += 2;
+        playerHealth = maxHealth;
+        showNotification(`最大生命值提升至${maxHealth}！`, 3000);
+    }
+    
+    // 显示升级选择菜单
+    levelUpPending = true;
+    levelUpMenu.style.display = 'block';
+    gameOver = true; // 暂停游戏
+}
+
+function updateLevelUI() {
+    const xpPercentage = (currentXP / xpToNextLevel) * 100;
+    xpFill.style.width = `${xpPercentage}%`;
+}
+
+// 选择初始攻击
+function chooseInitialAttack(abilityType) {
+    abilities[abilityType].unlocked = true;
+    availableAbilities.push(abilityType);
+    
+    // 初始攻击有小幅增强
+    switch(abilityType) {
+        case 'projectile':
+            abilities.projectile.cooldown = 1200; // 比升级获得的略快
+            showNotification("已解锁自动能量投射物！系统将自动发射", 4000);
+            break;
+        case 'slam':
+            abilities.slam.cooldown = 2500; // 比升级获得的略快
+            showNotification("已解锁自动地面重击！系统将自动触发", 4000);
+            break;
+        case 'dash':
+            abilities.dash.cooldown = 1700; // 比升级获得的略快
+            showNotification("已解锁自动战斗冲刺！系统将自动发动", 4000);
+            break;
+    }
+    
+    initialAttackMenu.style.display = 'none';
+    initialAttackChosen = true;
+    gameOver = false; // 开始游戏
+    gameStartTime = Date.now(); // 重置游戏开始时间
+}
+
+// 选择升级能力
+function chooseAbility(abilityType) {
+    // 如果已经解锁，则升级
+    if (abilities[abilityType].unlocked) {
+        switch(abilityType) {
+            case 'projectile':
+                abilities.projectile.damage += 0.5;
+                abilities.projectile.cooldown = Math.max(800, abilities.projectile.cooldown - 100);
+                showNotification("自动投射物已升级！更高伤害，更快冷却", 3000);
+                break;
+            case 'slam':
+                abilities.slam.damage += 0.5;
+                abilities.slam.radius += 0.2;
+                abilities.slam.cooldown = Math.max(2000, abilities.slam.cooldown - 200);
+                showNotification("自动重击已升级！更高伤害，更大范围", 3000);
+                break;
+            case 'dash':
+                abilities.dash.damage += 0.5;
+                abilities.dash.distance += 0.3;
+                abilities.dash.cooldown = Math.max(1200, abilities.dash.cooldown - 150);
+                showNotification("自动冲刺已升级！更远距离，更高伤害", 3000);
+                break;
+        }
+    } 
+    // 否则解锁新能力
+    else {
+        abilities[abilityType].unlocked = true;
+        availableAbilities.push(abilityType);
+        
+        switch(abilityType) {
+            case 'projectile':
+                showNotification("已解锁自动能量投射物！系统将自动发射", 3000);
+                break;
+            case 'slam':
+                showNotification("已解锁自动地面重击！系统将自动触发", 3000);
+                break;
+            case 'dash':
+                showNotification("已解锁自动战斗冲刺！系统将自动发动", 3000);
+                break;
+        }
+    }
+    
+    levelUpMenu.style.display = 'none';
+    levelUpPending = false;
+    gameOver = false; // 恢复游戏
+}
+
+// 攻击能力实现
+function fireProjectile() {
+    if (!abilities.projectile.unlocked) return;
+    
+    const now = Date.now();
+    if (now - abilities.projectile.lastUsed < abilities.projectile.cooldown) {
+        return; // 冷却中，不执行
+    }
+    
+    abilities.projectile.lastUsed = now;
+    
+    // 基于移动方向或面向方向发射
+    let directionX = moveVelocity.x;
+    let directionY = moveVelocity.y;
+    
+    // 如果静止，默认向上发射
+    if (Math.hypot(directionX, directionY) < 0.1) {
+        directionY = -1;
+    } else {
+        const dirLength = Math.hypot(directionX, directionY);
+        directionX /= dirLength;
+        directionY /= dirLength;
+    }
+    
+    // 寻找最近的敌人，优先向敌人方向发射
+    let closestEnemy = null;
+    let closestDistance = Infinity;
+    enemies.forEach(enemy => {
+        const dx = enemy.x - charX;
+        const dy = enemy.y - charY;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance < closestDistance && distance < abilities.projectile.range * 1.5) {
+            closestDistance = distance;
+            closestEnemy = enemy;
+        }
+    });
+    
+    // 如果有近距离敌人，瞄准敌人
+    if (closestEnemy) {
+        directionX = closestEnemy.x - charX;
+        directionY = closestEnemy.y - charY;
+        const dirLength = Math.hypot(directionX, directionY);
+        if (dirLength > 0) {
+            directionX /= dirLength;
+            directionY /= dirLength;
+        }
+    }
+    
+    projectiles.push({
+        x: charX,
+        y: charY,
+        dirX: directionX,
+        dirY: directionY,
+        speed: abilities.projectile.speed,
+        distance: 0,
+        maxDistance: abilities.projectile.range,
+        damage: abilities.projectile.damage,
+        size: GRID_SIZE * 0.3
+    });
+    
+    createParticles(
+        charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+        charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+        8, 'rgba(100, 200, 255, ', [1, 3]
+    );
+}
+
+function performSlam() {
+    if (!abilities.slam.unlocked) return;
+    
+    const now = Date.now();
+    if (now - abilities.slam.lastUsed < abilities.slam.cooldown) {
+        return; // 冷却中，不执行
+    }
+    
+    // 只有附近有敌人时才执行重击
+    let enemiesInRange = false;
+    enemies.forEach(enemy => {
         const dx = charX - enemy.x;
         const dy = charY - enemy.y;
         const distance = Math.hypot(dx, dy);
-        if(distance>0){
-            enemy.x += (dx/distance) * enemy.speed * deltaTime;
-            enemy.y += (dy/distance) * enemy.speed * deltaTime;
-        }
-        enemy.rotation += enemy.rotationSpeed;
-        if(distance<0.8){
-            playerHealth -= ENEMY_DAMAGE;
-            if(playerHealth <=0){
-                playerHealth=0;
-                gameOver=true;
-            }
-            enemy.health=0;
+        
+        if (distance < abilities.slam.radius * 1.5) {
+            enemiesInRange = true;
         }
     });
-    enemies = enemies.filter(e=>e.health>0);
+    
+    if (!enemiesInRange) return;
+    
+    abilities.slam.lastUsed = now;
+    
+    // 对范围内敌人造成伤害
+    enemies.forEach(enemy => {
+        const dx = charX - enemy.x;
+        const dy = charY - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance < abilities.slam.radius) {
+            enemy.health -= abilities.slam.damage;
+            createParticles(
+                enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                6, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+            );
+            
+            if (enemy.health <= 0) {
+                const killScore = Math.floor(enemy.scoreValue * comboMultiplier);
+                score += killScore;
+                gainXP(Math.floor(enemy.scoreValue / 2 * comboMultiplier));
+                showNotification(`+${killScore} (连击 x${comboMultiplier.toFixed(1)})`);
+                createParticles(
+                    enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                    enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                    10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                );
+                updateCombo();
+            }
+        }
+    });
+    
+    //  slam 效果
+    createParticles(
+        charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+        charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+        30, 'rgba(255, 150, 50, ', [2, 6], [0.5, 2]
+    );
+    
+    // 绘制 slam 波纹
+    particles.push({
+        x: charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+        y: charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+        size: GRID_SIZE * 0.5,
+        maxSize: GRID_SIZE * abilities.slam.radius,
+        speed: 0.8,
+        color: 'rgba(255, 150, 50, ',
+        alpha: 0.6,
+        decay: 0.03,
+        isRipple: true
+    });
+}
+
+function performDash() {
+    if (!abilities.dash.unlocked) return;
+    
+    const now = Date.now();
+    if (now - abilities.dash.lastUsed < abilities.dash.cooldown) {
+        return; // 冷却中，不执行
+    }
+    
+    // 只有前方有敌人或需要移动时才执行冲刺
+    let directionX = moveVelocity.x;
+    let directionY = moveVelocity.y;
+    let shouldDash = false;
+    
+    // 如果静止，检查周围是否有敌人
+    if (Math.hypot(directionX, directionY) < 0.1) {
+        enemies.forEach(enemy => {
+            const dx = enemy.x - charX;
+            const dy = enemy.y - charY;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance < abilities.dash.distance * 1.2) {
+                directionX = dx;
+                directionY = dy;
+                shouldDash = true;
+            }
+        });
+        
+        // 如果没有敌人，默认向上冲刺
+        if (!shouldDash) {
+            directionY = -1;
+            shouldDash = true; // 偶尔随机冲刺
+        }
+    } else {
+        shouldDash = true;
+    }
+    
+    if (!shouldDash) return;
+    
+    abilities.dash.lastUsed = now;
+    
+    // 归一化方向
+    const dirLength = Math.hypot(directionX, directionY);
+    if (dirLength > 0) {
+        directionX /= dirLength;
+        directionY /= dirLength;
+    }
+    
+    // 冲刺距离
+    const dashDistance = abilities.dash.distance;
+    
+    // 记录原始位置用于粒子效果
+    const startX = charX;
+    const startY = charY;
+    
+    // 应用冲刺
+    charX += directionX * dashDistance;
+    charY += directionY * dashDistance;
+    
+    // 对路径上的敌人造成伤害
+    enemies.forEach(enemy => {
+        // 检查敌人是否在冲刺路径上
+        const enemyVectorX = enemy.x - startX;
+        const enemyVectorY = enemy.y - startY;
+        const dotProduct = enemyVectorX * directionX + enemyVectorY * directionY;
+        
+        if (dotProduct > 0 && dotProduct < dashDistance) {
+            const perpendicularDistance = Math.abs(enemyVectorX * directionY - enemyVectorY * directionX);
+            
+            if (perpendicularDistance < 1) {
+                enemy.health -= abilities.dash.damage;
+                createParticles(
+                    enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                    enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                    6, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                );
+                
+                if (enemy.health <= 0) {
+                    const killScore = Math.floor(enemy.scoreValue * comboMultiplier);
+                    score += killScore;
+                    gainXP(Math.floor(enemy.scoreValue / 2 * comboMultiplier));
+                    showNotification(`+${killScore} (连击 x${comboMultiplier.toFixed(1)})`);
+                    createParticles(
+                        enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                    );
+                    updateCombo();
+                }
+            }
+        }
+    });
+    
+    // 冲刺轨迹粒子
+    for (let i = 0; i < dashDistance * 3; i++) {
+        const t = i / (dashDistance * 3);
+        const px = startX + directionX * dashDistance * t;
+        const py = startY + directionY * dashDistance * t;
+        
+        createParticles(
+            px * GRID_SIZE + cameraX + GRID_SIZE/2,
+            py * GRID_SIZE + cameraY + GRID_SIZE/2,
+            3, 'rgba(150, 200, 255, ', [1, 3], [0.3, 1]
+        );
+    }
+    
+    // 无敌时间
+    activeEffects.invulnerable.active = true;
+    activeEffects.invulnerable.endTime = now + 500;
+}
+
+// 自动攻击逻辑
+function autoAttack() {
+    if (gameOver || levelUpPending || !initialAttackChosen) return;
+    
+    // 检查并执行已解锁的自动攻击
+    availableAbilities.forEach(ability => {
+        switch(ability) {
+            case 'projectile':
+                fireProjectile();
+                break;
+            case 'slam':
+                performSlam();
+                break;
+            case 'dash':
+                performDash();
+                break;
+        }
+    });
+}
+
+// 键盘事件监听
+window.addEventListener('keydown', e => {
+    if (keys.hasOwnProperty(e.code)) {
+        e.preventDefault();
+        keys[e.code] = true;
+    }
+    if (gameOver && !levelUpPending && e.code === 'Enter' && gameStarted) resetGame();
+});
+window.addEventListener('keyup', e => {
+    if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
+});
+
+// 初始攻击选择
+document.querySelectorAll('#initialAttackMenu .selectionOption').forEach(option => {
+    option.addEventListener('click', () => {
+        chooseInitialAttack(option.dataset.choice);
+    });
+});
+
+// 升级选项选择
+document.querySelectorAll('#levelUpMenu .selectionOption').forEach(option => {
+    option.addEventListener('click', () => {
+        chooseAbility(option.dataset.choice);
+    });
+});
+
+// 开始游戏按钮
+startButton.addEventListener('click', () => {
+    startMenu.style.display = 'none';
+    initialAttackMenu.style.display = 'block';
+    gameStarted = true;
+    gameOver = true; // 等待玩家选择初始攻击
+});
+
+// 虚拟摇杆事件监听
+joystickBg.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const rect = joystickBg.getBoundingClientRect();
+    joystick.centerX = rect.left + rect.width / 2;
+    joystick.centerY = rect.top + rect.height / 2;
+    joystick.isActive = true;
+    updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+});
+
+document.addEventListener('touchmove', (e) => {
+    if (joystick.isActive) {
+        e.preventDefault();
+        updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+    }
+});
+
+document.addEventListener('touchend', () => {
+    if (joystick.isActive) {
+        joystick.isActive = false;
+        joystick.dir = { x: 0, y: 0 };
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
+    }
+});
+
+// 更新摇杆方向和位置
+function updateJoystick(touchX, touchY) {
+    const dx = touchX - joystick.centerX;
+    const dy = touchY - joystick.centerY;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance > joystick.radius) {
+        const scale = joystick.radius / distance;
+        joystick.dir.x = dx * scale / joystick.radius;
+        joystick.dir.y = dy * scale / joystick.radius;
+        joystickKnob.style.transform = `translate(${dx * scale - 20}px, ${dy * scale - 20}px)`;
+    } else {
+        joystick.dir.x = dx / joystick.radius;
+        joystick.dir.y = dy / joystick.radius;
+        joystickKnob.style.transform = `translate(${dx - 20}px, ${dy - 20}px)`;
+    }
+}
+
+// 粒子效果函数
+function createParticles(x, y, count, color, sizeRange = [2, 5], speedRange = [0.5, 2]) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = speedRange[0] + Math.random() * (speedRange[1] - speedRange[0]);
+        const size = sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]);
+        
+        particles.push({
+            x: x,
+            y: y,
+            size: size,
+            speed: speed,
+            angle: angle,
+            color: color,
+            alpha: 1,
+            decay: 0.02 + Math.random() * 0.03,
+            isRipple: false
+        });
+    }
+}
+
+function updateParticles(deltaTime) {
+    particles.forEach((p, index) => {
+        if (p.isRipple) {
+            // 波纹效果特殊处理
+            p.size += p.speed;
+            p.alpha -= p.decay;
+            
+            if (p.size > p.maxSize || p.alpha <= 0) {
+                particles.splice(index, 1);
+            }
+        } else {
+            p.x += Math.cos(p.angle) * p.speed * (deltaTime / 16);
+            p.y += Math.sin(p.angle) * p.speed * (deltaTime / 16);
+            p.alpha -= p.decay;
+            
+            if (p.alpha <= 0) {
+                particles.splice(index, 1);
+            }
+        }
+    });
+}
+
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.fillStyle = `${p.color}${Math.floor(p.alpha * 255).toString(16).padStart(2, '0')}`;
+        ctx.beginPath();
+        if (p.isRipple) {
+            ctx.strokeStyle = `${p.color}${Math.floor(p.alpha * 255).toString(16).padStart(2, '0')}`;
+            ctx.lineWidth = 2;
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+}
+
+// 更新投射物
+function updateProjectiles(deltaTime) {
+    projectiles.forEach((proj, index) => {
+        proj.x += proj.dirX * proj.speed * deltaTime;
+        proj.y += proj.dirY * proj.speed * deltaTime;
+        proj.distance += proj.speed * deltaTime;
+        
+        // 检查是否超出最大距离
+        if (proj.distance > proj.maxDistance) {
+            projectiles.splice(index, 1);
+            return;
+        }
+        
+        // 检查是否击中敌人
+        enemies.forEach((enemy, eIndex) => {
+            const dx = proj.x - enemy.x;
+            const dy = proj.y - enemy.y;
+            const distance = Math.hypot(dx, dy);
+            
+            if (distance < 0.7) {
+                enemy.health -= proj.damage;
+                createParticles(
+                    enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                    enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                    6, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                );
+                
+                // 移除投射物
+                projectiles.splice(index, 1);
+                
+                // 检查敌人是否被击败
+                if (enemy.health <= 0) {
+                    const killScore = Math.floor(enemy.scoreValue * comboMultiplier);
+                    score += killScore;
+                    gainXP(Math.floor(enemy.scoreValue / 2 * comboMultiplier));
+                    showNotification(`+${killScore} (连击 x${comboMultiplier.toFixed(1)})`);
+                    createParticles(
+                        enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                    );
+                    updateCombo();
+                    enemies.splice(eIndex, 1);
+                }
+            }
+        });
+    });
+}
+
+// 绘制投射物
+function drawProjectiles() {
+    projectiles.forEach(proj => {
+        const px = proj.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
+        const py = proj.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
+        
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(px, py, proj.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 轨迹
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
+        ctx.beginPath();
+        ctx.arc(px - proj.dirX * 10, py - proj.dirY * 10, proj.size * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+
+// 敌人生成和更新函数
+function spawnEnemy() {
+    if (gameOver || levelUpPending || !initialAttackChosen) return;
+    
+    const gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+    if (gameTime > 90 && !enemyTypes.includes('fast')) {
+        enemyTypes.push('fast');
+        showNotification("快速敌人出现了！", 3000);
+    }
+    if (gameTime > 240 && !enemyTypes.includes('tank')) {
+        enemyTypes.push('tank');
+        showNotification("坦克敌人出现了！", 3000);
+    }
+    if (gameTime > 420 && !enemyTypes.includes('seeker')) {
+        enemyTypes.push('seeker');
+        showNotification("追踪者敌人出现了！", 3000);
+    }
+    
+    let typeProbabilities = [];
+    enemyTypes.forEach(type => {
+        let weight = 1;
+        if (type === 'basic') weight = Math.max(0.3, 1 - (gameTime / 600) * 0.8);
+        if (type === 'fast') weight = 0.5 + (gameTime / 600) * 0.5;
+        if (type === 'tank') weight = 0.3 + (gameTime / 600) * 0.7;
+        if (type === 'seeker') weight = (gameTime / 600) * 0.8;
+        
+        for (let i = 0; i < weight * 10; i++) {
+            typeProbabilities.push(type);
+        }
+    });
+    
+    const type = typeProbabilities[Math.floor(Math.random() * typeProbabilities.length)];
+    
+    const spawnDistance = 15 + Math.floor(gameTime / 60);
+    const angle = Math.random() * Math.PI * 2;
+    const enemyX = charX + Math.cos(angle) * spawnDistance;
+    const enemyY = charY + Math.sin(angle) * spawnDistance;
+    
+    let health, speed, value, behavior, xpReward;
+    switch (type) {
+        case 'basic':
+            health = 1;
+            speed = 0.15 * enemySpeedMultiplier;
+            value = 10;
+            xpReward = 15;
+            behavior = 'chase';
+            break;
+        case 'fast':
+            health = 1;
+            speed = 0.25 * enemySpeedMultiplier;
+            value = 15;
+            xpReward = 20;
+            behavior = 'chase';
+            break;
+        case 'tank':
+            health = 3;
+            speed = 0.1 * enemySpeedMultiplier;
+            value = 30;
+            xpReward = 40;
+            behavior = 'chase';
+            break;
+        case 'seeker':
+            health = 2;
+            speed = 0.2 * enemySpeedMultiplier;
+            value = 25;
+            xpReward = 30;
+            behavior = 'predict';
+            break;
+    }
+    
+    enemies.push({
+        x: enemyX,
+        y: enemyY,
+        health: health,
+        maxHealth: health,
+        rotation: 0,
+        rotationSpeed: 0.1 + Math.random() * 0.1,
+        speed: speed,
+        type: type,
+        scoreValue: value,
+        xpReward: xpReward,
+        behavior: behavior,
+        lastSeenPlayerPos: {x: charX, y: charY},
+        lastUpdateTime: Date.now()
+    });
+}
+
+// 道具生成和更新函数
+function spawnPowerup() {
+    if (gameOver || levelUpPending || !initialAttackChosen) return;
+    
+    let typeProbabilities = [];
+    Object.keys(POWERUP_TYPES).forEach(type => {
+        let weight = 1;
+        
+        if (type === 'health' && playerHealth < 5) weight = 2;
+        if (type === 'shield' && activeEffects.shield.active) weight = 0.3;
+        if (type === 'xpboost') weight = 0.7;
+        
+        for (let i = 0; i < weight * 10; i++) {
+            typeProbabilities.push(type);
+        }
+    });
+    
+    const type = typeProbabilities[Math.floor(Math.random() * typeProbabilities.length)];
+    
+    const spawnDistance = 8 + Math.floor(Math.random() * 12);
+    const angle = Math.random() * Math.PI * 2;
+    const powerupX = charX + Math.cos(angle) * spawnDistance;
+    const powerupY = charY + Math.sin(angle) * spawnDistance;
+    
+    powerups.push({
+        x: powerupX,
+        y: powerupY,
+        type: type,
+        spawnTime: Date.now(),
+        lifetime: 10000,
+        pulse: 0
+    });
+}
+
+function applyPowerup(type) {
+    const powerup = POWERUP_TYPES[type];
+    switch (powerup.effect) {
+        case 'health':
+            const healAmount = 3;
+            playerHealth = Math.min(playerHealth + healAmount, maxHealth);
+            score += 5;
+            showNotification(`+${healAmount} 生命值！`);
+            createParticles(
+                charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                15, 'rgba(76, 175, 80, ', [2, 4]
+            );
+            break;
+        case 'speed':
+            activeEffects.speed.active = true;
+            activeEffects.speed.endTime = Date.now() + powerup.duration;
+            currentMaxSpeed = BASE_SPEED * 1.5;
+            playerSpeed = BASE_SPEED * 1.3;
+            score += 10;
+            showNotification("速度提升已激活！");
+            createParticles(
+                charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                30, 'rgba(33, 150, 243, ', [3, 6], [1, 3]
+            );
+            break;
+        case 'shield':
+            activeEffects.shield.active = true;
+            activeEffects.shield.endTime = Date.now() + powerup.duration;
+            score += 10;
+            showNotification("护盾已激活！");
+            createParticles(
+                charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                25, 'rgba(255, 235, 59, ', [2, 6]
+            );
+            break;
+        case 'blast':
+            score += 15;
+            showNotification("爆炸！敌人已消灭！");
+            createParticles(
+                charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                40, 'rgba(244, 67, 54, ', [3, 8]
+            );
+            
+            const blastRadius = 5;
+            enemies = enemies.filter(enemy => {
+                const dx = charX - enemy.x;
+                const dy = charY - enemy.y;
+                const distance = Math.hypot(dx, dy);
+                
+                if (distance < blastRadius) {
+                    createParticles(
+                        enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                    );
+                    score += enemy.scoreValue;
+                    gainXP(enemy.xpReward / 2);
+                    updateCombo();
+                    return false;
+                }
+                return true;
+            });
+            break;
+        case 'xpboost':
+            activeEffects.xpboost.active = true;
+            activeEffects.xpboost.endTime = Date.now() + 10000;
+            showNotification("经验值提升！10秒内获得50%额外经验！");
+            createParticles(
+                charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                20, 'rgba(255, 215, 0, ', [2, 5]
+            );
+            break;
+    }
+}
+
+// 连击系统
+function updateCombo() {
+    const now = Date.now();
+    if (now - lastEnemyKillTime < COMBO_TIMEOUT) {
+        comboMultiplier = Math.min(comboMultiplier + 0.2, 3);
+    } else {
+        comboMultiplier = 1;
+    }
+    lastEnemyKillTime = now;
+    
+    if (comboMultiplier > 1) {
+        showNotification(`连击 x${comboMultiplier.toFixed(1)}！`);
+    }
+}
+
+// 敌人更新
+function updateEnemies(deltaTime) {
+    if (gameOver || levelUpPending || !initialAttackChosen) return;
+    
+    const now = Date.now();
+    enemies.forEach(enemy => {
+        let targetX, targetY;
+        
+        switch (enemy.behavior) {
+            case 'chase':
+                targetX = charX;
+                targetY = charY;
+                break;
+            case 'predict':
+                const predictionTime = 1200;
+                if (now - enemy.lastUpdateTime > 300) {
+                    enemy.lastSeenPlayerPos = {x: charX, y: charY};
+                    enemy.lastUpdateTime = now;
+                }
+                
+                const moveVectorX = charX - enemy.lastSeenPlayerPos.x;
+                const moveVectorY = charY - enemy.lastSeenPlayerPos.y;
+                const moveDistance = Math.hypot(moveVectorX, moveVectorY);
+                
+                if (moveDistance > 0.1) {
+                    const predictionFactor = predictionTime / 300;
+                    targetX = charX + (moveVectorX / moveDistance) * enemy.speed * predictionFactor;
+                    targetY = charY + (moveVectorY / moveDistance) * enemy.speed * predictionFactor;
+                } else {
+                    targetX = charX;
+                    targetY = charY;
+                }
+                break;
+        }
+        
+        const dx = targetX - enemy.x;
+        const dy = targetY - enemy.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance > 0) {
+            enemy.x += (dx / distance) * enemy.speed * deltaTime;
+            enemy.y += (dy / distance) * enemy.speed * deltaTime;
+        }
+        
+        enemy.rotation += enemy.rotationSpeed;
+        
+        const playerDistance = Math.hypot(charX - enemy.x, charY - enemy.y);
+        if (playerDistance < 0.8) {
+            if (activeEffects.shield.active) {
+                enemy.health = 0;
+                const shieldScore = Math.floor(enemy.scoreValue * comboMultiplier / 2);
+                score += shieldScore;
+                gainXP(Math.floor(enemy.xpReward * comboMultiplier / 4));
+                if (shieldScore > 0) {
+                    showNotification(`+${shieldScore} (护盾)`);
+                }
+                createParticles(
+                    enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                    enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                    10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                );
+                updateCombo();
+            } else if (activeEffects.invulnerable.active) {
+                enemy.health -= 1;
+                if (enemy.health <= 0) {
+                    const killScore = Math.floor(enemy.scoreValue * comboMultiplier);
+                    score += killScore;
+                    gainXP(Math.floor(enemy.xpReward * comboMultiplier));
+                    showNotification(`+${killScore} (连击 x${comboMultiplier.toFixed(1)})`);
+                    createParticles(
+                        enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                    );
+                    updateCombo();
+                }
+            } else {
+                const damageMap = { basic: 1, fast: 1, tank: 2, seeker: 1 };
+                const damage = damageMap[enemy.type] || 1;
+                playerHealth -= damage;
+                
+                activeEffects.invulnerable.active = true;
+                activeEffects.invulnerable.endTime = now + 1000;
+                
+                if (playerHealth <= 0) {
+                    playerHealth = 0;
+                    gameOver = true;
+                    createParticles(
+                        charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        50, 'rgba(255, 0, 0, ', [3, 8]
+                    );
+                } else {
+                    showNotification(`- ${damage} 生命值！`);
+                    createParticles(
+                        charX * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        charY * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        20, 'rgba(255, 0, 0, ', [2, 5]
+                    );
+                }
+                
+                enemy.health -= 1;
+                if (enemy.health <= 0) {
+                    const killScore = Math.floor(enemy.scoreValue * comboMultiplier);
+                    score += killScore;
+                    gainXP(Math.floor(enemy.xpReward * comboMultiplier));
+                    showNotification(`+${killScore} (连击 x${comboMultiplier.toFixed(1)})`);
+                    createParticles(
+                        enemy.x * GRID_SIZE + cameraX + GRID_SIZE/2,
+                        enemy.y * GRID_SIZE + cameraY + GRID_SIZE/2,
+                        10, `${ENEMY_COLORS[enemy.type]}`, [2, 4]
+                    );
+                    updateCombo();
+                }
+            }
+        }
+    });
+    
+    enemies = enemies.filter(e => e.health > 0);
+}
+
+// 道具更新
+function updatePowerups() {
+    if (gameOver || levelUpPending || !initialAttackChosen) return;
+    
+    powerups.forEach(powerup => {
+        powerup.pulse = Math.sin((Date.now() - powerup.spawnTime) / 500) * 0.3 + 0.7;
+    });
+    
+    powerups.forEach((powerup, index) => {
+        const dx = charX - powerup.x;
+        const dy = charY - powerup.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance < 1) {
+            applyPowerup(powerup.type);
+            powerups.splice(index, 1);
+        }
+    });
+    
+    const now = Date.now();
+    powerups = powerups.filter(p => now - p.spawnTime < p.lifetime);
+}
+
+// 玩家状态效果更新
+function updatePlayerEffects() {
+    const now = Date.now();
+    
+    if (activeEffects.speed.active) {
+        if (now > activeEffects.speed.endTime) {
+            activeEffects.speed.active = false;
+            currentMaxSpeed = BASE_SPEED * 1.1;
+            playerSpeed = BASE_SPEED;
+            showNotification("速度提升结束");
+        } else {
+            const remaining = Math.ceil((activeEffects.speed.endTime - now) / 1000);
+            if (remaining <= 3 && remaining % 1 === 0) {
+                showNotification(`速度提升：${remaining}秒`);
+            }
+        }
+    }
+    
+    if (activeEffects.shield.active) {
+        if (now > activeEffects.shield.endTime) {
+            activeEffects.shield.active = false;
+            showNotification("护盾结束");
+        } else {
+            const remaining = Math.ceil((activeEffects.shield.endTime - now) / 1000);
+            if (remaining <= 3 && remaining % 1 === 0) {
+                showNotification(`护盾：${remaining}秒`);
+            }
+        }
+    }
+    
+    if (activeEffects.invulnerable.active && now > activeEffects.invulnerable.endTime) {
+        activeEffects.invulnerable.active = false;
+    }
+    
+    if (activeEffects.xpboost.active) {
+        if (now > activeEffects.xpboost.endTime) {
+            activeEffects.xpboost.active = false;
+            showNotification("经验值提升结束");
+        } else {
+            const remaining = Math.ceil((activeEffects.xpboost.endTime - now) / 1000);
+            if (remaining <= 3 && remaining % 1 === 0) {
+                showNotification(`经验值提升：${remaining}秒`);
+            }
+        }
+    }
+}
+
+// 难度增加
+function increaseDifficulty() {
+    const gameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+    
+    enemySpeedMultiplier = 0.6 + (gameTime / 600) * 1.8;
+    if (enemySpeedMultiplier > 2.4) enemySpeedMultiplier = 2.4;
+    
+    enemySpawnInterval = Math.max(500, 2000 - (gameTime / 600) * 1300);
+    
+    if (gameTime === 60) showNotification("已过去1分钟！", 3000);
+    if (gameTime === 180) showNotification("已过去3分钟！", 3000);
+    if (gameTime === 300) showNotification("已过去5分钟！", 3000);
+    if (gameTime === 420) showNotification("已过去7分钟！", 3000);
+    if (gameTime === 540) showNotification("已过去9分钟！", 3000);
 }
 
 // 重置游戏
-function resetGame(){
-    playerHealth = MAX_HEALTH;
-    gameOver=false;
-    enemies=[];
-    charX=0;
-    charY=0;
-    visitedCells=new Set();
-    positionHistory=[];
-    lastEnemySpawnTime=0;
-    lastMoveTime=Date.now();
+function resetGame() {
+    if (score > highScore) {
+        highScore = Math.floor(score);
+        localStorage.setItem('gridGameHighScore', highScore);
+        showNotification(`新的最高分：${highScore}！`, 5000);
+    }
+    
+    // 重置玩家状态
+    playerHealth = maxHealth;
+    playerSpeed = BASE_SPEED;
+    currentMaxSpeed = BASE_SPEED * 1.1;
+    gameOver = false;
+    gameWon = false;
+    score = 0;
+    comboMultiplier = 1;
+    
+    // 重置等级系统
+    playerLevel = 1;
+    currentXP = 0;
+    xpToNextLevel = 100;
+    availableAbilities = [];
+    for (const key in abilities) {
+        abilities[key].unlocked = false;
+    }
+    updateLevelUI();
+    levelValue.textContent = playerLevel;
+    
+    // 重置最大生命值
+    maxHealth = 10;
+    
+    // 清空实体
+    enemies = [];
+    powerups = [];
+    particles = [];
+    projectiles = [];
+    
+    // 重置位置和移动
+    charX = 0;
+    charY = 0;
+    moveVelocity = { x: 0, y: 0 };
+    visitedCells = new Set();
+    positionHistory = [];
+    lastEnemySpawnTime = 0;
+    lastPowerupSpawnTime = 0;
+    lastMoveTime = Date.now();
+    lastEnemyKillTime = 0;
+    
+    // 重置游戏状态
+    enemySpawnInterval = 2000;
+    enemySpeedMultiplier = 0.6;
+    enemyTypes = ['basic'];
+    activeEffects = {
+        speed: { active: false, endTime: 0 },
+        shield: { active: false, endTime: 0 },
+        invulnerable: { active: false, endTime: 0 },
+        xpboost: { active: false, endTime: 0, multiplier: 1.5 }
+    };
+    
+    // 显示初始攻击选择菜单
+    initialAttackMenu.style.display = 'block';
+    initialAttackChosen = false;
+    gameStartTime = Date.now();
+    remainingTime = GAME_DURATION;
+    levelUpMenu.style.display = 'none';
+    levelUpPending = false;
 }
 
 // 更新逻辑
 let lastFrameTime = Date.now();
-function update(){
+function update() {
     const now = Date.now();
-    const deltaTime = (now-lastFrameTime)/16.6667; // 基于60FPS比例
+    const deltaTime = (now - lastFrameTime) / 16.6667;
     lastFrameTime = now;
 
-    if(!gameOver){
-        const prevX=charX, prevY=charY;
-        if(keys.ArrowUp||keys.KeyW) charY--;
-        if(keys.ArrowDown||keys.KeyS) charY++;
-        if(keys.ArrowLeft||keys.KeyA) charX--;
-        if(keys.ArrowRight||keys.KeyD) charX++;
+    if (!gameOver && !levelUpPending && initialAttackChosen) {
+        // 执行自动攻击
+        autoAttack();
+        
+        remainingTime = GAME_DURATION - Math.floor((now - gameStartTime) / 1000);
+        if (remainingTime <= 0) {
+            gameOver = true;
+            gameWon = playerHealth > 0;
+        }
 
-        const isMoving = charX!==prevX || charY!==prevY;
-        if(isMoving){
-            positionHistory.unshift({x:charX,y:charY});
-            if(positionHistory.length>3) positionHistory.pop();
-            visitedCells.add(`${charX},${charY}`);
+        score += deltaTime / 60;
+
+        const prevX = charX, prevY = charY;
+        
+        // 移动逻辑
+        let targetDir = { x: 0, y: 0 };
+        
+        // 优先使用摇杆方向
+        if (joystick.isActive) {
+            targetDir = joystick.dir;
+        } 
+        // 否则使用键盘方向
+        else {
+            if (keys.ArrowLeft || keys.KeyA) targetDir.x = -1;
+            if (keys.ArrowRight || keys.KeyD) targetDir.x = 1;
+            if (keys.ArrowUp || keys.KeyW) targetDir.y = -1;
+            if (keys.ArrowDown || keys.KeyS) targetDir.y = 1;
+        }
+
+        // 归一化方向
+        const dirLength = Math.hypot(targetDir.x, targetDir.y);
+        if (dirLength > 0) {
+            targetDir.x /= dirLength;
+            targetDir.y /= dirLength;
+        }
+
+        // 加速度
+        if (dirLength > 0) {
+            moveVelocity.x += targetDir.x * ACCELERATION;
+            moveVelocity.y += targetDir.y * ACCELERATION;
+            
+            // 限制最大速度
+            const currentSpeed = Math.hypot(moveVelocity.x, moveVelocity.y);
+            if (currentSpeed > currentMaxSpeed) {
+                const scale = currentMaxSpeed / currentSpeed;
+                moveVelocity.x *= scale;
+                moveVelocity.y *= scale;
+            }
+        } 
+        // 减速度
+        else {
+            moveVelocity.x *= (1 - DECELERATION);
+            moveVelocity.y *= (1 - DECELERATION);
+            
+            if (Math.abs(moveVelocity.x) < 0.01) moveVelocity.x = 0;
+            if (Math.abs(moveVelocity.y) < 0.01) moveVelocity.y = 0;
+        }
+
+        // 应用速度
+        charX += moveVelocity.x * deltaTime;
+        charY += moveVelocity.y * deltaTime;
+
+        // 记录移动历史
+        const isMoving = Math.abs(charX - prevX) > 0.01 || Math.abs(charY - prevY) > 0.01;
+        if (isMoving) {
+            positionHistory.unshift({ x: charX, y: charY });
+            if (positionHistory.length > 15) positionHistory.pop();
+            const cellX = Math.floor(charX);
+            const cellY = Math.floor(charY);
+            visitedCells.add(`${cellX},${cellY}`);
             lastMoveTime = now;
         } else {
-            if(now - lastMoveTime > 1000){
-                positionHistory=[];
+            if (now - lastMoveTime > 1000) {
+                positionHistory = [];
             }
         }
 
-        if(now - lastEnemySpawnTime > ENEMY_SPAWN_INTERVAL){
+        // 敌人生成
+        if (now - lastEnemySpawnTime > enemySpawnInterval) {
             spawnEnemy();
+            const gameTime = Math.floor((now - gameStartTime) / 1000);
+            const multiSpawnChance = Math.min(0.4, gameTime / 600 * 0.4);
+            if (Math.random() < multiSpawnChance && enemyTypes.length > 1) {
+                spawnEnemy();
+            }
             lastEnemySpawnTime = now;
         }
 
+        // 道具生成
+        if (now - lastPowerupSpawnTime > POWERUP_SPAWN_INTERVAL) {
+            spawnPowerup();
+            if (playerHealth < 4) {
+                setTimeout(spawnPowerup, 2000);
+            }
+            lastPowerupSpawnTime = now;
+        }
+
+        // 更新投射物
+        updateProjectiles(deltaTime);
+        
+        // 系统更新
         updateEnemies(deltaTime);
-        cameraX = canvas.width/2 - charX*GRID_SIZE - GRID_SIZE/2;
-        cameraY = canvas.height/2 - charY*GRID_SIZE - GRID_SIZE/2;
+        updatePowerups();
+        updatePlayerEffects();
+        updateParticles(deltaTime);
+        increaseDifficulty();
+        
+        // 相机跟随
+        const targetCameraX = canvas.width/2 - charX * GRID_SIZE - GRID_SIZE/2;
+        const targetCameraY = canvas.height/2 - charY * GRID_SIZE - GRID_SIZE/2;
+        cameraX += (targetCameraX - cameraX) * 0.1;
+        cameraY += (targetCameraY - cameraY) * 0.1;
     }
 
     requestAnimationFrame(update);
 }
 
-// 绘制
-function draw(){
+// 绘制函数
+function draw() {
     ctx.fillStyle = GRID_COLOR;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const startCol = Math.floor(-cameraX/GRID_SIZE)-1;
-    const endCol = Math.floor((-cameraX+canvas.width)/GRID_SIZE)+1;
-    const startRow = Math.floor(-cameraY/GRID_SIZE)-1;
-    const endRow = Math.floor((-cameraY+canvas.height)/GRID_SIZE)+1;
+    const startCol = Math.floor(-cameraX / GRID_SIZE) - 1;
+    const endCol = Math.floor((-cameraX + canvas.width) / GRID_SIZE) + 1;
+    const startRow = Math.floor(-cameraY / GRID_SIZE) - 1;
+    const endRow = Math.floor((-cameraY + canvas.height) / GRID_SIZE) + 1;
 
-    // 已访问格子
-    ctx.fillStyle='rgba(76,175,80,0.4)';
-    for(let col=startCol;col<=endCol;col++){
-        for(let row=startRow;row<=endRow;row++){
-            if(visitedCells.has(`${col},${row}`)){
-                ctx.fillRect(col*GRID_SIZE+cameraX,row*GRID_SIZE+cameraY,GRID_SIZE,GRID_SIZE);
+    // 绘制访问过的单元格
+    ctx.fillStyle = 'rgba(76,175,80,0.1)';
+    for (let col = startCol; col <= endCol; col++) {
+        for (let row = startRow; row <= endRow; row++) {
+            if (visitedCells.has(`${col},${row}`)) {
+                ctx.fillRect(col * GRID_SIZE + cameraX, row * GRID_SIZE + cameraY, GRID_SIZE, GRID_SIZE);
             }
         }
     }
 
-    // 网格
-    ctx.strokeStyle=LINE_COLOR;
-    ctx.lineWidth=1;
-    for(let col=startCol;col<=endCol;col++){
-        const x = col*GRID_SIZE+cameraX;
+    // 绘制网格线
+    ctx.lineWidth = 1;
+    for (let col = startCol; col <= endCol; col++) {
+        const x = col * GRID_SIZE + cameraX;
+        const distance = Math.abs(col - charX);
+        const alpha = Math.max(0.1, 1 - distance / 30);
+        ctx.strokeStyle = `rgba(58, 58, 58, ${alpha})`;
+        
         ctx.beginPath();
-        ctx.moveTo(x,0);
-        ctx.lineTo(x,canvas.height);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
         ctx.stroke();
     }
-    for(let row=startRow;row<=endRow;row++){
-        const y = row*GRID_SIZE+cameraY;
+    for (let row = startRow; row <= endRow; row++) {
+        const y = row * GRID_SIZE + cameraY;
+        const distance = Math.abs(row - charY);
+        const alpha = Math.max(0.1, 1 - distance / 30);
+        ctx.strokeStyle = `rgba(58, 58, 58, ${alpha})`;
+        
         ctx.beginPath();
-        ctx.moveTo(0,y);
-        ctx.lineTo(canvas.width,y);
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
         ctx.stroke();
     }
 
-    // 敌人
-    enemies.forEach(enemy=>{
-        const ex = enemy.x*GRID_SIZE+cameraX+GRID_SIZE/2;
-        const ey = enemy.y*GRID_SIZE+cameraY+GRID_SIZE/2;
-        ctx.fillStyle=ENEMY_COLOR;
-        ctx.save();
-        ctx.translate(ex,ey);
-        ctx.rotate(enemy.rotation);
+    // 绘制道具
+    powerups.forEach(powerup => {
+        const px = powerup.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
+        const py = powerup.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
+        const type = POWERUP_TYPES[powerup.type];
+        
+        const age = Date.now() - powerup.spawnTime;
+        let alpha = 1;
+        if (age > powerup.lifetime - 3000) {
+            alpha = 0.4 + Math.sin(age * 0.005) * 0.6;
+        }
+        
+        const sizeMultiplier = 1 + powerup.pulse * 0.2;
+        
+        ctx.fillStyle = `rgba(${hexToRgb(type.color)}, ${alpha * 0.3})`;
         ctx.beginPath();
-        ctx.moveTo(0,-ENEMY_SIZE/2);
-        ctx.lineTo(-ENEMY_SIZE/2,ENEMY_SIZE/2);
-        ctx.lineTo(ENEMY_SIZE/2,ENEMY_SIZE/2);
-        ctx.closePath();
+        ctx.arc(px, py, POWERUP_SIZE / 2 * sizeMultiplier, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = `rgba(${hexToRgb(type.color)}, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(px, py, POWERUP_SIZE / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(type.icon, px, py);
+    });
+
+    // 绘制敌人
+    enemies.forEach(enemy => {
+        const ex = enemy.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
+        const ey = enemy.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
+        ctx.fillStyle = ENEMY_COLORS[enemy.type];
+        ctx.save();
+        ctx.translate(ex, ey);
+        ctx.rotate(enemy.rotation);
+        
+        if (enemy.type === 'basic') {
+            ctx.beginPath();
+            ctx.moveTo(0, -ENEMY_SIZES.basic / 2);
+            ctx.lineTo(-ENEMY_SIZES.basic / 2, ENEMY_SIZES.basic / 2);
+            ctx.lineTo(ENEMY_SIZES.basic / 2, ENEMY_SIZES.basic / 2);
+            ctx.closePath();
+        } else if (enemy.type === 'fast') {
+            ctx.beginPath();
+            ctx.rect(-ENEMY_SIZES.fast / 2, -ENEMY_SIZES.fast / 2, ENEMY_SIZES.fast, ENEMY_SIZES.fast);
+            ctx.closePath();
+        } else if (enemy.type === 'tank') {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, ENEMY_SIZES.tank / 2, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            ctx.fillStyle = ENEMY_COLORS.tank;
+            ctx.beginPath();
+            ctx.arc(0, 0, (ENEMY_SIZES.tank / 2) * (enemy.health / enemy.maxHealth), 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '8px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(enemy.health, 0, 0);
+        } else if (enemy.type === 'seeker') {
+            ctx.fillStyle = ENEMY_COLORS.seeker;
+            ctx.beginPath();
+            ctx.arc(0, 0, ENEMY_SIZES.seeker / 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            const playerAngle = Math.atan2(charY - enemy.y, charX - enemy.x);
+            ctx.rotate(playerAngle);
+            ctx.beginPath();
+            ctx.moveTo(0, -ENEMY_SIZES.seeker / 2);
+            ctx.lineTo(-ENEMY_SIZES.seeker / 4, ENEMY_SIZES.seeker / 4);
+            ctx.lineTo(ENEMY_SIZES.seeker / 4, ENEMY_SIZES.seeker / 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
         ctx.fill();
         ctx.restore();
     });
 
-    // 角色
-    const charScreenX = charX*GRID_SIZE+cameraX+GRID_SIZE/2;
-    const charScreenY = charY*GRID_SIZE+cameraY+GRID_SIZE/2;
-    ctx.fillStyle = CHARACTER_COLOR;
-    ctx.beginPath();
-    ctx.arc(charScreenX,charScreenY,CHARACTER_SIZE/2,0,Math.PI*2);
-    ctx.fill();
+    // 绘制投射物
+    drawProjectiles();
 
-    // 残影
-    positionHistory.forEach((pos,index)=>{
-        const alpha = 0.9 - index*0.3;
-        const size = CHARACTER_SIZE/2*(1-index*0.05);
-        ctx.fillStyle=`rgba(76,175,80,${alpha})`;
-        const tx = pos.x*GRID_SIZE+cameraX+GRID_SIZE/2;
-        const ty = pos.y*GRID_SIZE+cameraY+GRID_SIZE/2;
+    // 绘制角色
+    const charScreenX = charX * GRID_SIZE + cameraX + GRID_SIZE / 2;
+    const charScreenY = charY * GRID_SIZE + cameraY + GRID_SIZE / 2;
+    
+    // 绘制护盾
+    if (activeEffects.shield.active) {
+        const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+        ctx.strokeStyle = 'rgba(255, 235, 59, 0.7)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(tx,ty,size,0,Math.PI*2);
+        ctx.arc(charScreenX, charScreenY, (CHARACTER_SIZE / 2 + 5) * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // XP 提升效果
+    if (activeEffects.xpboost.active) {
+        const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.05;
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(charScreenX, charScreenY, (CHARACTER_SIZE / 2 + 10) * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // 无敌状态闪烁效果
+    let drawCharacter = true;
+    if (activeEffects.invulnerable.active) {
+        const flashRate = 100;
+        drawCharacter = Math.floor(Date.now() / flashRate) % 2 === 0;
+    }
+    
+    // 绘制角色主体
+    if (drawCharacter) {
+        ctx.fillStyle = activeEffects.speed.active ? '#2196F3' : CHARACTER_COLOR;
+        ctx.beginPath();
+        ctx.arc(charScreenX, charScreenY, CHARACTER_SIZE / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 绘制方向指示器
+        const currentSpeed = Math.hypot(moveVelocity.x, moveVelocity.y);
+        if (currentSpeed > 0.05) {
+            const moveAngle = Math.atan2(moveVelocity.y, moveVelocity.x);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.save();
+            ctx.translate(charScreenX, charScreenY);
+            ctx.rotate(moveAngle);
+            
+            // 绘制小箭头
+            ctx.beginPath();
+            ctx.moveTo(CHARACTER_SIZE / 3, 0);
+            ctx.lineTo(-CHARACTER_SIZE / 6, -CHARACTER_SIZE / 6);
+            ctx.lineTo(-CHARACTER_SIZE / 6, CHARACTER_SIZE / 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // 绘制动态轨迹
+    const currentSpeed = Math.hypot(moveVelocity.x, moveVelocity.y);
+    const trailLength = Math.max(3, Math.min(8, Math.floor(currentSpeed * 15)));
+    
+    positionHistory.slice(0, trailLength).forEach((pos, index) => {
+        const alpha = 0.9 - (index / trailLength) * 0.8;
+        const size = CHARACTER_SIZE / 2 * (1 - (index / trailLength) * 0.3);
+        const speedBrightness = Math.min(1, currentSpeed / currentMaxSpeed);
+        const color = activeEffects.speed.active 
+            ? `rgba(33, 150, 243, ${alpha * (0.8 + speedBrightness * 0.2)})` 
+            : `rgba(76, 175, 80, ${alpha * (0.8 + speedBrightness * 0.2)})`;
+        
+        ctx.fillStyle = color;
+        const tx = pos.x * GRID_SIZE + cameraX + GRID_SIZE / 2;
+        const ty = pos.y * GRID_SIZE + cameraY + GRID_SIZE / 2;
+        ctx.beginPath();
+        ctx.arc(tx, ty, size, 0, Math.PI * 2);
         ctx.fill();
     });
 
-    // 血条
-    ctx.fillStyle='#333';
-    ctx.fillRect(20,20,200,20);
-    ctx.fillStyle = playerHealth>5?'#4CAF50':playerHealth>2?'#FFC107':'#F44336';
-    ctx.fillRect(20,20,(playerHealth/MAX_HEALTH)*200,20);
-    ctx.strokeStyle='#fff';
-    ctx.lineWidth=2;
-    ctx.strokeRect(20,20,200,20);
-    ctx.fillStyle='#fff';
-    ctx.font='14px Arial';
-    ctx.fillText(`Health: ${playerHealth}/${MAX_HEALTH}`,80,34);
+    // 绘制粒子
+    drawParticles();
 
-    // 游戏结束
-    if(gameOver){
-        ctx.fillStyle='rgba(0,0,0,0.7)';
-        ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle='#fff';
-        ctx.font='48px Arial';
-        ctx.textAlign='center';
-        ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2);
-        ctx.font='24px Arial';
-        ctx.fillText('Press Enter to Restart',canvas.width/2,canvas.height/2+40);
+    // 绘制能力冷却提示
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    let abilityX = 20;
+    const abilityY = canvas.height - 60;
+    const abilitySize = 40;
+    
+    if (abilities.projectile.unlocked) {
+        const now = Date.now();
+        const cooldownPercent = Math.min(1, (now - abilities.projectile.lastUsed) / abilities.projectile.cooldown);
+        
+        ctx.fillRect(abilityX, abilityY, abilitySize, abilitySize);
+        ctx.fillStyle = cooldownPercent < 1 ? 'rgba(100, 100, 100, 0.7)' : '#fff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚡', abilityX + abilitySize/2, abilityY + abilitySize/2);
+        
+        if (cooldownPercent < 1) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(
+                abilityX, 
+                abilityY + abilitySize * cooldownPercent, 
+                abilitySize, 
+                abilitySize * (1 - cooldownPercent)
+            );
+        }
+        
+        abilityX += abilitySize + 10;
+    }
+    
+    if (abilities.slam.unlocked) {
+        const now = Date.now();
+        const cooldownPercent = Math.min(1, (now - abilities.slam.lastUsed) / abilities.slam.cooldown);
+        
+        ctx.fillRect(abilityX, abilityY, abilitySize, abilitySize);
+        ctx.fillStyle = cooldownPercent < 1 ? 'rgba(100, 100, 100, 0.7)' : '#fff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💥', abilityX + abilitySize/2, abilityY + abilitySize/2);
+        
+        if (cooldownPercent < 1) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(
+                abilityX, 
+                abilityY + abilitySize * cooldownPercent, 
+                abilitySize, 
+                abilitySize * (1 - cooldownPercent)
+            );
+        }
+        
+        abilityX += abilitySize + 10;
+    }
+    
+    if (abilities.dash.unlocked) {
+        const now = Date.now();
+        const cooldownPercent = Math.min(1, (now - abilities.dash.lastUsed) / abilities.dash.cooldown);
+        
+        ctx.fillRect(abilityX, abilityY, abilitySize, abilitySize);
+        ctx.fillStyle = cooldownPercent < 1 ? 'rgba(100, 100, 100, 0.7)' : '#fff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('↗️', abilityX + abilitySize/2, abilityY + abilitySize/2);
+        
+        if (cooldownPercent < 1) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(
+                abilityX, 
+                abilityY + abilitySize * cooldownPercent, 
+                abilitySize, 
+                abilitySize * (1 - cooldownPercent)
+            );
+        }
+        
+        abilityX += abilitySize + 10;
+    }
+
+    // 绘制UI元素
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(20, 20, 200, 20);
+    const healthColor = playerHealth > 5 ? '#4CAF50' : playerHealth > 2 ? '#FFC107' : '#F44336';
+    ctx.fillStyle = healthColor;
+    ctx.fillRect(20, 20, (playerHealth / maxHealth) * 200, 20);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(20, 20, 200, 20);
+    
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`生命值: ${playerHealth}/${maxHealth}`, 25, 34);
+    
+    const minutes = Math.floor(remainingTime / 60);
+    const seconds = remainingTime % 60;
+    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    ctx.fillText(`时间: ${timeString}`, 240, 34);
+    
+    ctx.fillText(`分数: ${Math.floor(score)}`, 240, 59);
+    ctx.fillText(`最高分: ${highScore}`, 240, 84);
+    
+    if (comboMultiplier > 1) {
+        ctx.fillStyle = `rgba(255, 152, 0, ${0.5 + Math.sin(Date.now() * 0.005) * 0.2})`;
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText(`连击 x${comboMultiplier.toFixed(1)}`, 240, 109);
+    }
+    
+    let effectText = [];
+    if (activeEffects.speed.active) {
+        const remaining = Math.ceil((activeEffects.speed.endTime - Date.now()) / 1000);
+        effectText.push(`速度提升 (${remaining}秒)`);
+    }
+    if (activeEffects.shield.active) {
+        const remaining = Math.ceil((activeEffects.shield.endTime - Date.now()) / 1000);
+        effectText.push(`护盾 (${remaining}秒)`);
+    }
+    if (activeEffects.xpboost.active) {
+        const remaining = Math.ceil((activeEffects.xpboost.endTime - Date.now()) / 1000);
+        effectText.push(`经验提升 (${remaining}秒)`);
+    }
+    
+    if (effectText.length > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(20, 55, 200, 20);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`效果: ${effectText.join(', ')}`, 25, 69);
+    }
+
+    // 游戏结束画面
+    if (gameOver && !levelUpPending && gameStarted) {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = gameWon ? '#4CAF50' : '#F44336';
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(gameWon ? '任务成功！' : '游戏结束', canvas.width / 2, canvas.height / 2 - 40);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Arial';
+        ctx.fillText(`最终得分: ${Math.floor(score)}`, canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText(`达到等级: ${playerLevel}`, canvas.width / 2, canvas.height / 2 + 50);
+        
+        if (Math.floor(score) === parseInt(highScore) && score > 0) {
+            ctx.fillStyle = '#FFEB3B';
+            ctx.font = '24px Arial';
+            ctx.fillText('新的最高分！', canvas.width / 2, canvas.height / 2 + 80);
+        }
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px Arial';
+        ctx.fillText('按回车键重新开始', canvas.width / 2, canvas.height / 2 + 120);
     }
 
     requestAnimationFrame(draw);
 }
 
-update();
-draw();
+// 辅助函数：十六进制转RGB
+function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `${r}, ${g}, ${b}`;
+}
+
+// 初始化游戏
+function initGame() {
+    updateLevelUI();
+    update();
+    draw();
+}
+
+// 启动游戏
+initGame();
 </script>
 </body>
 </html>
+    
